@@ -1,0 +1,14 @@
+{
+  "name": "chronoscope",
+  "version": "0.1.0",
+  "description": "Capture-on-failure replay timeline for microservices.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "demo": "node src/demo.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
