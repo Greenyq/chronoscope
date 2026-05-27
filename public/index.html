@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chronoscope</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="mark">C</span>
+          <div>
+            <h1>Chronoscope</h1>
+            <p>Capture-on-failure replay</p>
+          </div>
+        </div>
+        <button id="runDemo" class="primary">Run demo incident</button>
+        <div class="metric">
+          <span>Stored failed replays</span>
+          <strong id="replayCount">0</strong>
+        </div>
+        <div id="replayList" class="replay-list"></div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <h2 id="title">No replay selected</h2>
+            <p id="subtitle">Run the demo to capture a failed microservice trace.</p>
+          </div>
+          <div class="actions">
+            <button id="refresh">Refresh</button>
+          </div>
+        </header>
+
+        <section class="insight">
+          <div>
+            <span class="label">Likely cause</span>
+            <p id="likelyCause">Waiting for replay evidence.</p>
+          </div>
+          <div>
+            <span class="label">Services</span>
+            <p id="services">-</p>
+          </div>
+        </section>
+
+        <section class="timeline-wrap">
+          <div class="timeline-head">
+            <span>Timeline</span>
+            <span id="duration">0ms</span>
+          </div>
+          <div id="timeline" class="timeline empty">No captured failure yet.</div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
