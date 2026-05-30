@@ -10,7 +10,7 @@ const duration = document.querySelector("#duration");
 const timeline = document.querySelector("#timeline");
 
 document.querySelector("#runDemo").addEventListener("click", async () => {
-  await fetch("/api/demo", { method: "POST" });
+  await apiFetch("/api/demo", { method: "POST" });
   await loadReplays();
 });
 
@@ -19,7 +19,7 @@ document.querySelector("#refresh").addEventListener("click", loadReplays);
 await loadReplays();
 
 async function loadReplays() {
-  const response = await fetch("/api/replays");
+  const response = await apiFetch("/api/replays");
   const { replays } = await response.json();
 
   replayCount.textContent = replays.length;
@@ -43,7 +43,7 @@ async function loadReplays() {
 
 async function loadReplay(replayId) {
   selectedReplayId = replayId;
-  const response = await fetch(`/api/replays/${replayId}`);
+  const response = await apiFetch(`/api/replays/${replayId}`);
   const { replay } = await response.json();
 
   title.textContent = replay.name;
@@ -73,7 +73,7 @@ async function loadReplay(replayId) {
 }
 
 async function loadReplaysWithoutAutoSelect() {
-  const response = await fetch("/api/replays");
+  const response = await apiFetch("/api/replays");
   const { replays } = await response.json();
 
   replayCount.textContent = replays.length;
@@ -89,6 +89,34 @@ async function loadReplaysWithoutAutoSelect() {
     button.addEventListener("click", () => loadReplay(replay.replayId));
     replayList.append(button);
   }
+}
+
+async function apiFetch(url, options = {}) {
+  const response = await fetchWithApiKey(url, options);
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  localStorage.removeItem("chronoscopeApiKey");
+  const apiKey = window.prompt("Chronoscope API key");
+  if (!apiKey) {
+    throw new Error("API key required");
+  }
+
+  localStorage.setItem("chronoscopeApiKey", apiKey);
+  return fetchWithApiKey(url, options);
+}
+
+function fetchWithApiKey(url, options) {
+  const headers = new Headers(options.headers ?? {});
+  const apiKey = localStorage.getItem("chronoscopeApiKey");
+
+  if (apiKey) {
+    headers.set("X-API-Key", apiKey);
+  }
+
+  return fetch(url, { ...options, headers });
 }
 
 function escapeHtml(value) {

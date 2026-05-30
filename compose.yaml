@@ -1,0 +1,34 @@
+services:
+  chronoscope:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 4177
+      CHRONOSCOPE_DB_PATH: /data/chronoscope.sqlite
+      CHRONOSCOPE_API_KEY: ${CHRONOSCOPE_API_KEY:?Set CHRONOSCOPE_API_KEY in .env}
+    volumes:
+      - chronoscope-data:/data
+    expose:
+      - "4177"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      chronoscope:
+        condition: service_healthy
+    environment:
+      CHRONOSCOPE_DOMAIN: ${CHRONOSCOPE_DOMAIN:?Set CHRONOSCOPE_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  chronoscope-data:
+  caddy-data:
+  caddy-config:

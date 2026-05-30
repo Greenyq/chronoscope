@@ -1,9 +1,65 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 const activeTraces = new Map();
-const replays = new Map();
 
 const MAX_REPLAYS = 100;
+const databasePath = process.env.CHRONOSCOPE_DB_PATH ?? process.env.DATABASE_PATH ?? ":memory:";
+const db = openDatabase(databasePath);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS replays (
+    replay_id TEXT PRIMARY KEY,
+    trace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    service TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    payload TEXT NOT NULL
+  );
+`);
+
+const insertReplay = db.prepare(`
+  INSERT OR REPLACE INTO replays (
+    replay_id,
+    trace_id,
+    name,
+    service,
+    reason,
+    started_at,
+    finished_at,
+    duration_ms,
+    payload
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const listReplayRows = db.prepare(`
+  SELECT payload
+  FROM replays
+  ORDER BY datetime(finished_at) DESC
+  LIMIT ?
+`);
+
+const getReplayRow = db.prepare(`
+  SELECT payload
+  FROM replays
+  WHERE replay_id = ?
+`);
+
+const listReplayIdsAfterLimit = db.prepare(`
+  SELECT replay_id
+  FROM replays
+  ORDER BY datetime(finished_at) DESC
+  LIMIT -1 OFFSET ?
+`);
+
+const deleteReplay = db.prepare("DELETE FROM replays WHERE replay_id = ?");
+const deleteAllReplays = db.prepare("DELETE FROM replays");
 
 export function createTrace({ name, service, metadata = {} }) {
   const traceId = crypto.randomUUID();
@@ -86,16 +142,17 @@ export function finishTrace(traceId, result) {
     summary: summarize(trace, result),
   };
 
-  replays.set(replay.replayId, replay);
+  persistReplay(replay);
   trimReplays();
 
   return { persisted: true, replay };
 }
 
 export function listReplays() {
-  return [...replays.values()]
-    .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt))
-    .map((replay) => ({
+  return listReplayRows.all(MAX_REPLAYS).map(({ payload }) => {
+    const replay = JSON.parse(payload);
+
+    return {
       replayId: replay.replayId,
       traceId: replay.traceId,
       name: replay.name,
@@ -106,23 +163,46 @@ export function listReplays() {
       durationMs: replay.durationMs,
       eventCount: replay.events.length,
       summary: replay.summary,
-    }));
+    };
+  });
 }
 
 export function getReplay(replayId) {
-  return replays.get(replayId) ?? null;
+  const row = getReplayRow.get(replayId);
+  return row ? JSON.parse(row.payload) : null;
 }
 
 export function resetStore() {
   activeTraces.clear();
-  replays.clear();
+  deleteAllReplays.run();
 }
 
 function trimReplays() {
-  const ordered = listReplays();
-  for (const replay of ordered.slice(MAX_REPLAYS)) {
-    replays.delete(replay.replayId);
+  for (const replay of listReplayIdsAfterLimit.all(MAX_REPLAYS)) {
+    deleteReplay.run(replay.replay_id);
   }
+}
+
+function persistReplay(replay) {
+  insertReplay.run(
+    replay.replayId,
+    replay.traceId,
+    replay.name,
+    replay.service,
+    replay.reason,
+    replay.startedAt,
+    replay.finishedAt,
+    replay.durationMs,
+    JSON.stringify(replay),
+  );
+}
+
+function openDatabase(filePath) {
+  if (filePath !== ":memory:") {
+    fs.mkdirSync(path.dirname(path.resolve(filePath)), { recursive: true });
+  }
+
+  return new DatabaseSync(filePath);
 }
 
 function summarize(trace, result) {

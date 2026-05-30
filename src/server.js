@@ -8,10 +8,19 @@ import { runScenario } from "./scenario.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
 const port = Number(process.env.PORT ?? 4177);
+const apiKey = process.env.CHRONOSCOPE_API_KEY ?? "";
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (req.method === "GET" && url.pathname === "/healthz") {
+      return json(res, 200, { ok: true });
+    }
+
+    if (url.pathname.startsWith("/api/") && !isAuthorized(req)) {
+      return json(res, 401, { error: "API key required" });
+    }
 
     if (req.method === "GET" && url.pathname === "/api/replays") {
       return json(res, 200, { replays: listReplays() });
@@ -57,6 +66,18 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, () => {
   console.log(`Chronoscope running at http://localhost:${port}`);
 });
+
+function isAuthorized(req) {
+  if (!apiKey) {
+    return true;
+  }
+
+  const headerKey = req.headers["x-api-key"];
+  const authorization = req.headers.authorization ?? "";
+  const bearerKey = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
+
+  return headerKey === apiKey || bearerKey === apiKey;
+}
 
 async function staticFile(res, pathname) {
   const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
