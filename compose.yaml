@@ -6,6 +6,8 @@ services:
       PORT: 4177
       CHRONOSCOPE_DB_PATH: /data/chronoscope.sqlite
       CHRONOSCOPE_API_KEY: ${CHRONOSCOPE_API_KEY:?Set CHRONOSCOPE_API_KEY in .env}
+      BNL_API_BASE_URL: ${BNL_API_BASE_URL:-}
+      BNL_CHRONOSCOPE_KEY: ${BNL_CHRONOSCOPE_KEY:-}
     volumes:
       - chronoscope-data:/data
     expose:

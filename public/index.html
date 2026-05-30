@@ -13,14 +13,33 @@
           <span class="mark">C</span>
           <div>
             <h1>Chronoscope</h1>
-            <p>Capture-on-failure replay</p>
+            <p>Failure replay console</p>
           </div>
         </div>
-        <button id="runDemo" class="primary">Run demo incident</button>
-        <div class="metric">
-          <span>Stored failed replays</span>
-          <strong id="replayCount">0</strong>
+
+        <div class="action-grid">
+          <button id="runDemo" class="primary">Demo incident</button>
+          <button id="runBnl" class="secondary">BNL probe</button>
         </div>
+
+        <div class="key-row">
+          <input id="apiKey" type="password" placeholder="API key" autocomplete="off" />
+          <button id="saveApiKey" aria-label="Save API key">Save</button>
+        </div>
+
+        <div id="statusLine" class="status-line">Ready</div>
+
+        <div class="metric-grid">
+          <div class="metric">
+            <span>Failed replays</span>
+            <strong id="replayCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Source</span>
+            <strong id="sourceCount">API</strong>
+          </div>
+        </div>
+
         <div id="replayList" class="replay-list"></div>
       </aside>
 
@@ -35,21 +54,25 @@
           </div>
         </header>
 
-        <section class="insight">
-          <div>
+        <section class="insight-grid">
+          <div class="insight primary-insight">
             <span class="label">Likely cause</span>
             <p id="likelyCause">Waiting for replay evidence.</p>
           </div>
-          <div>
+          <div class="insight">
             <span class="label">Services</span>
             <p id="services">-</p>
+          </div>
+          <div class="insight">
+            <span class="label">Duration</span>
+            <p id="duration">0ms</p>
           </div>
         </section>
 
         <section class="timeline-wrap">
           <div class="timeline-head">
             <span>Timeline</span>
-            <span id="duration">0ms</span>
+            <span id="eventCount">0 events</span>
           </div>
           <div id="timeline" class="timeline empty">No captured failure yet.</div>
         </section>
