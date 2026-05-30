@@ -2,16 +2,37 @@ let selectedReplayId = null;
 
 const replayList = document.querySelector("#replayList");
 const replayCount = document.querySelector("#replayCount");
+const sourceCount = document.querySelector("#sourceCount");
+const statusLine = document.querySelector("#statusLine");
+const apiKeyInput = document.querySelector("#apiKey");
 const title = document.querySelector("#title");
 const subtitle = document.querySelector("#subtitle");
 const likelyCause = document.querySelector("#likelyCause");
 const services = document.querySelector("#services");
 const duration = document.querySelector("#duration");
+const eventCount = document.querySelector("#eventCount");
 const timeline = document.querySelector("#timeline");
 
+apiKeyInput.value = localStorage.getItem("chronoscopeApiKey") ?? "";
+
+document.querySelector("#saveApiKey").addEventListener("click", () => {
+  localStorage.setItem("chronoscopeApiKey", apiKeyInput.value.trim());
+  statusLine.textContent = "API key saved";
+  statusLine.className = "status-line ok";
+});
+
 document.querySelector("#runDemo").addEventListener("click", async () => {
-  await apiFetch("/api/demo", { method: "POST" });
-  await loadReplays();
+  await runAction("Demo incident captured", async () => {
+    await apiFetch("/api/demo", { method: "POST" });
+    await loadReplays();
+  });
+});
+
+document.querySelector("#runBnl").addEventListener("click", async () => {
+  await runAction("BNL probe captured", async () => {
+    await apiFetch("/api/bnl/probe", { method: "POST" });
+    await loadReplays();
+  });
 });
 
 document.querySelector("#refresh").addEventListener("click", loadReplays);
@@ -23,14 +44,16 @@ async function loadReplays() {
   const { replays } = await response.json();
 
   replayCount.textContent = replays.length;
+  sourceCount.textContent = selectedReplayId?.startsWith("run_") ? "Live" : "API";
   replayList.innerHTML = "";
 
   for (const replay of replays) {
     const button = document.createElement("button");
     button.className = `replay-item ${replay.replayId === selectedReplayId ? "active" : ""}`;
     button.innerHTML = `
+      <span class="replay-kicker">${escapeHtml(replay.service)} - ${replay.eventCount} events</span>
       <strong>${escapeHtml(replay.name)}</strong>
-      <span>${escapeHtml(replay.reason)} - ${replay.eventCount} events</span>
+      <span>${escapeHtml(replay.reason)}</span>
     `;
     button.addEventListener("click", () => loadReplay(replay.replayId));
     replayList.append(button);
@@ -51,15 +74,19 @@ async function loadReplay(replayId) {
   likelyCause.textContent = replay.summary.likelyCause;
   services.textContent = replay.summary.services.join(", ");
   duration.textContent = `${replay.durationMs}ms`;
+  eventCount.textContent = `${replay.events.length} events`;
   timeline.className = "timeline";
   timeline.innerHTML = "";
 
   for (const event of replay.events) {
     const item = document.createElement("article");
-    item.className = `event ${event.level === "error" ? "error" : ""}`;
+    item.className = `event ${event.level === "error" ? "error" : event.level === "warn" ? "warn" : ""}`;
     item.innerHTML = `
       <div class="time">+${event.offsetMs}ms</div>
-      <div class="service">${escapeHtml(event.service)}</div>
+      <div>
+        <div class="service">${escapeHtml(event.service)}</div>
+        <span class="level ${escapeHtml(event.level)}">${escapeHtml(event.level)}</span>
+      </div>
       <div>
         <span class="type">${escapeHtml(event.type)}</span>
         <p class="message">${escapeHtml(event.message)}</p>
@@ -83,36 +110,51 @@ async function loadReplaysWithoutAutoSelect() {
     const button = document.createElement("button");
     button.className = `replay-item ${replay.replayId === selectedReplayId ? "active" : ""}`;
     button.innerHTML = `
+      <span class="replay-kicker">${escapeHtml(replay.service)} - ${replay.eventCount} events</span>
       <strong>${escapeHtml(replay.name)}</strong>
-      <span>${escapeHtml(replay.reason)} - ${replay.eventCount} events</span>
+      <span>${escapeHtml(replay.reason)}</span>
     `;
     button.addEventListener("click", () => loadReplay(replay.replayId));
     replayList.append(button);
   }
 }
 
+async function runAction(successMessage, action) {
+  statusLine.textContent = "Working...";
+  statusLine.className = "status-line busy";
+
+  try {
+    await action();
+    statusLine.textContent = successMessage;
+    statusLine.className = "status-line ok";
+  } catch (error) {
+    statusLine.textContent = error.message;
+    statusLine.className = "status-line error";
+  }
+}
+
 async function apiFetch(url, options = {}) {
   const response = await fetchWithApiKey(url, options);
 
-  if (response.status !== 401) {
-    return response;
-  }
-
-  localStorage.removeItem("chronoscopeApiKey");
-  const apiKey = window.prompt("Chronoscope API key");
-  if (!apiKey) {
+  if (response.status === 401) {
+    statusLine.textContent = "API key required";
+    statusLine.className = "status-line error";
     throw new Error("API key required");
   }
 
-  localStorage.setItem("chronoscopeApiKey", apiKey);
-  return fetchWithApiKey(url, options);
+  if (!response.ok) {
+    throw new Error(`Request failed with HTTP ${response.status}`);
+  }
+
+  return response;
 }
 
 function fetchWithApiKey(url, options) {
   const headers = new Headers(options.headers ?? {});
-  const apiKey = localStorage.getItem("chronoscopeApiKey");
+  const apiKey = apiKeyInput.value.trim() || localStorage.getItem("chronoscopeApiKey");
 
   if (apiKey) {
+    localStorage.setItem("chronoscopeApiKey", apiKey);
     headers.set("X-API-Key", apiKey);
   }
 

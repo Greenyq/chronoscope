@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { addEvent, createTrace, finishTrace, getReplay, listReplays } from "./store.js";
 import { runScenario } from "./scenario.js";
+import { runBnlProbe } from "./bnl.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "..", "public");
@@ -54,6 +55,11 @@ const server = http.createServer(async (req, res) => {
       const ok = await runScenario({ shouldFail: false });
       const failed = await runScenario({ shouldFail: true });
       return json(res, 200, { ok, failed, replays: listReplays() });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/bnl/probe") {
+      const result = await runBnlProbe();
+      return json(res, 200, { result, replays: listReplays() });
     }
 
     return staticFile(res, url.pathname);
