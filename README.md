@@ -10,9 +10,11 @@ Most service traces are noisy. Chronoscope is a small prototype for a different 
 
 ## Features
 
-- In-memory trace capture
+- In-memory trace capture while a request is active
 - Failed-trace replay persistence
 - Successful-trace discard behavior
+- SQLite persistence for failed replay sessions
+- API key authentication for API routes
 - Timeline UI for inspecting service events
 - Demo checkout scenario with one passing and one failing flow
 - Basic sensitive-field redaction for tokens, passwords, cookies, authorization values, and secrets
@@ -20,8 +22,9 @@ Most service traces are noisy. Chronoscope is a small prototype for a different 
 
 ## Tech Stack
 
-- Node.js 20+
+- Node.js 24+
 - Native HTTP server
+- `node:sqlite`
 - Vanilla JavaScript frontend
 - CSS
 - `node:test`
@@ -30,9 +33,13 @@ Most service traces are noisy. Chronoscope is a small prototype for a different 
 
 ```text
 chronoscope/
+├── deploy/          Caddy reverse proxy config
+├── docs/            Deployment and EC2 inspection runbook
 ├── public/          Browser UI
 ├── src/             Server, replay store, and demo scenario
 ├── test/            Store behavior tests
+├── compose.yaml
+├── Dockerfile
 ├── package.json
 └── README.md
 ```
@@ -48,6 +55,14 @@ Open:
 ```text
 http://localhost:4177
 ```
+
+Failed replay sessions are stored in SQLite. By default local runs use an in-memory database. To persist locally:
+
+```bash
+CHRONOSCOPE_DB_PATH=./data/chronoscope.sqlite npm start
+```
+
+Set `CHRONOSCOPE_API_KEY` to require `X-API-Key` or `Authorization: Bearer` authentication on `/api/*` routes.
 
 ## Run The Demo
 
@@ -65,9 +80,19 @@ The demo sends one successful microservice flow and one failing flow. Only the f
 npm test
 ```
 
+## Deploy
+
+Copy `.env.example` to `.env`, set a domain, ACME email, and long random API key, then run:
+
+```bash
+docker compose up -d --build
+```
+
+The Compose stack runs Chronoscope with automatic restarts, persists SQLite data in the `chronoscope-data` volume, and publishes HTTPS through Caddy. See [docs/deployment.md](docs/deployment.md) for the EC2 inspection checklist, cleanup plan, architecture diagram, and operations commands.
+
 ## Status
 
-Prototype. The core behavior is working and covered by small tests. Good next steps would be persistent storage, trace import/export, richer filters, and a real SDK-style capture API.
+Prototype. The core behavior is working and covered by small tests. Good next steps would be trace import/export, richer filters, and a real SDK-style capture API.
 
 ## License
 
