@@ -7,75 +7,229 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <aside class="sidebar">
+    <main class="app-shell">
+      <aside class="rail">
         <div class="brand">
-          <span class="mark">C</span>
+          <span class="brand-mark">C</span>
           <div>
             <h1>Chronoscope</h1>
-            <p>Failure replay console</p>
+            <p>Incident Replay</p>
           </div>
         </div>
 
-        <div class="action-grid">
-          <button id="runDemo" class="primary">Demo incident</button>
-          <button id="runBnl" class="secondary">BNL probe</button>
+        <nav class="nav">
+          <button class="nav-item active" type="button"><span>R</span>Replays</button>
+          <button class="nav-item" type="button"><span>T</span>Timeline</button>
+          <button class="nav-item" type="button"><span>S</span>Services</button>
+          <button class="nav-item" type="button"><span>I</span>Insights</button>
+        </nav>
+
+        <div class="rail-spacer"></div>
+
+        <section class="api-panel">
+          <div class="api-head">
+            <span>API Key</span>
+            <span id="apiState" class="state-dot"></span>
+          </div>
+          <div class="api-row">
+            <input id="apiKey" type="password" placeholder="Enter key" autocomplete="off" />
+            <button id="saveApiKey" type="button">Save</button>
+          </div>
+          <p id="statusLine" class="status-line">Ready</p>
+        </section>
+
+        <section class="system-card">
+          <span>System</span>
+          <strong>Healthy</strong>
+          <small>v0.2.0</small>
+        </section>
+      </aside>
+
+      <section class="replay-pane">
+        <header class="pane-head">
+          <div>
+            <h2>Replays</h2>
+            <p><span id="replayCount">0</span> incidents found</p>
+          </div>
+          <button id="sortToggle" type="button">Newest First</button>
+        </header>
+
+        <div class="search-box">
+          <span></span>
+          <input id="searchInput" type="search" placeholder="Search replays..." />
         </div>
 
-        <div class="key-row">
-          <input id="apiKey" type="password" placeholder="API key" autocomplete="off" />
-          <button id="saveApiKey" aria-label="Save API key">Save</button>
+        <div class="filters">
+          <select id="serviceFilter" aria-label="Service filter">
+            <option value="">All Services</option>
+          </select>
+          <select id="levelFilter" aria-label="Level filter">
+            <option value="">All Levels</option>
+            <option value="error">Errors</option>
+            <option value="warn">Warnings</option>
+            <option value="info">Info</option>
+          </select>
         </div>
 
-        <div id="statusLine" class="status-line">Ready</div>
-
-        <div class="metric-grid">
-          <div class="metric">
-            <span>Failed replays</span>
-            <strong id="replayCount">0</strong>
-          </div>
-          <div class="metric">
-            <span>Source</span>
-            <strong id="sourceCount">API</strong>
-          </div>
+        <div class="quick-actions">
+          <button id="runDemo" type="button">Demo Incident</button>
+          <button id="runBnl" type="button">BNL Probe</button>
         </div>
 
         <div id="replayList" class="replay-list"></div>
-      </aside>
+      </section>
 
-      <section class="workspace">
+      <section class="detail-pane">
         <header class="topbar">
-          <div>
-            <h2 id="title">No replay selected</h2>
-            <p id="subtitle">Run the demo to capture a failed microservice trace.</p>
+          <div class="global-search">
+            <span></span>
+            <input id="globalSearch" type="search" placeholder="Search current replay..." />
+            <kbd>/</kbd>
           </div>
-          <div class="actions">
-            <span id="incidentTime" class="incident-time">No incident time</span>
-            <button id="refresh">Refresh</button>
+          <div class="user-chip">
+            <span id="topApiState" class="state-dot"></span>
+            <span class="avatar">G</span>
+            <span>Greenyq</span>
           </div>
         </header>
 
-        <section class="insight-grid">
-          <div class="insight primary-insight">
-            <span class="label">Likely cause</span>
-            <p id="likelyCause">Waiting for replay evidence.</p>
-          </div>
-          <div class="insight">
-            <span class="label">Services</span>
-            <p id="services">-</p>
-          </div>
-          <div class="insight">
-            <span class="label">Duration</span>
-            <p id="duration">0ms</p>
-          </div>
+        <section id="emptyState" class="empty-state">
+          <span class="empty-mark">C</span>
+          <h2>No replay selected</h2>
+          <p>Run a probe or select a captured failure from the replay list.</p>
         </section>
 
-        <section class="timeline-wrap">
-          <div class="timeline-head">
-            <span>Timeline</span>
-            <span id="eventCount">0 events</span>
+        <section id="detailView" class="detail-view hidden">
+          <div class="detail-toolbar">
+            <button id="backToReplays" type="button">Back to replays</button>
+            <div class="detail-actions">
+              <button id="exportJson" type="button">Export JSON</button>
+              <button class="danger-action" type="button" disabled>Delete Replay</button>
+            </div>
           </div>
-          <div id="timeline" class="timeline empty">No captured failure yet.</div>
+
+          <header class="hero-card">
+            <div>
+              <div class="hero-title-row">
+                <span id="statusIcon" class="status-icon">!</span>
+                <h2 id="title">Replay details</h2>
+                <span id="statusBadge" class="badge error">Failed</span>
+              </div>
+              <div id="subtitle" class="hero-meta"></div>
+            </div>
+          </header>
+
+          <section class="stat-strip">
+            <div>
+              <span>Service</span>
+              <strong id="primaryService">-</strong>
+            </div>
+            <div>
+              <span>Duration</span>
+              <strong id="duration">0ms</strong>
+            </div>
+            <div>
+              <span>Started At</span>
+              <strong id="startedAt">-</strong>
+            </div>
+            <div>
+              <span>Trace ID</span>
+              <strong id="traceId">-</strong>
+            </div>
+            <div>
+              <span>Events</span>
+              <strong id="eventCount">0</strong>
+            </div>
+          </section>
+
+          <section class="insight-grid">
+            <article class="insight-card danger-card">
+              <span class="card-icon">!</span>
+              <div>
+                <span class="label">Likely Cause</span>
+                <strong id="likelyCauseTitle">Waiting for evidence</strong>
+                <p id="likelyCause">-</p>
+              </div>
+            </article>
+            <article class="insight-card">
+              <span class="card-icon purple">S</span>
+              <div>
+                <span class="label">Services Involved</span>
+                <strong id="serviceCount">0</strong>
+                <div id="servicePills" class="pills"></div>
+              </div>
+            </article>
+            <article class="insight-card">
+              <span class="card-icon green">D</span>
+              <div>
+                <span class="label">Duration</span>
+                <strong id="durationLarge">0ms</strong>
+                <p id="incidentTime">No incident time</p>
+              </div>
+            </article>
+            <article class="insight-card">
+              <span class="card-icon pink">E</span>
+              <div>
+                <span class="label">Events</span>
+                <strong id="eventCountLarge">0</strong>
+                <p id="eventBreakdown">-</p>
+              </div>
+            </article>
+          </section>
+
+          <section class="content-grid">
+            <article class="timeline-card">
+              <div class="section-head">
+                <div>
+                  <h3>Timeline</h3>
+                  <span id="timelineCount">0 events</span>
+                </div>
+                <div class="view-toggle">
+                  <button class="active" type="button">Timeline</button>
+                  <button type="button">List</button>
+                </div>
+              </div>
+              <div id="timelineRows" class="timeline-rows"></div>
+            </article>
+
+            <aside class="event-details">
+              <div class="section-head">
+                <div>
+                  <h3>Event Details</h3>
+                  <span id="selectedEventId">No event selected</span>
+                </div>
+              </div>
+              <div id="eventDetailBody" class="event-detail-body"></div>
+            </aside>
+          </section>
+
+          <section class="lower-grid">
+            <article class="code-card">
+              <div class="section-head">
+                <div>
+                  <h3>Event Payload</h3>
+                  <span id="payloadLabel">Selected event data</span>
+                </div>
+                <button id="copyPayload" type="button">Copy</button>
+              </div>
+              <pre id="payloadCode"></pre>
+            </article>
+
+            <article class="summary-card">
+              <h3>Trace Summary</h3>
+              <dl id="traceSummary"></dl>
+            </article>
+
+            <article class="code-card">
+              <div class="section-head">
+                <div>
+                  <h3>Metadata</h3>
+                  <span>Trace context</span>
+                </div>
+              </div>
+              <pre id="metadataCode"></pre>
+            </article>
+          </section>
         </section>
       </section>
     </main>

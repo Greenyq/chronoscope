@@ -1,139 +1,353 @@
 let selectedReplayId = null;
+let selectedReplay = null;
+let selectedEventId = null;
+let allReplays = [];
+let sortNewestFirst = true;
 
-const replayList = document.querySelector("#replayList");
-const replayCount = document.querySelector("#replayCount");
-const sourceCount = document.querySelector("#sourceCount");
-const statusLine = document.querySelector("#statusLine");
-const apiKeyInput = document.querySelector("#apiKey");
-const title = document.querySelector("#title");
-const subtitle = document.querySelector("#subtitle");
-const incidentTime = document.querySelector("#incidentTime");
-const likelyCause = document.querySelector("#likelyCause");
-const services = document.querySelector("#services");
-const duration = document.querySelector("#duration");
-const eventCount = document.querySelector("#eventCount");
-const timeline = document.querySelector("#timeline");
+const els = {
+  apiKey: document.querySelector("#apiKey"),
+  apiState: document.querySelector("#apiState"),
+  topApiState: document.querySelector("#topApiState"),
+  statusLine: document.querySelector("#statusLine"),
+  replayCount: document.querySelector("#replayCount"),
+  replayList: document.querySelector("#replayList"),
+  searchInput: document.querySelector("#searchInput"),
+  globalSearch: document.querySelector("#globalSearch"),
+  serviceFilter: document.querySelector("#serviceFilter"),
+  levelFilter: document.querySelector("#levelFilter"),
+  sortToggle: document.querySelector("#sortToggle"),
+  emptyState: document.querySelector("#emptyState"),
+  detailView: document.querySelector("#detailView"),
+  title: document.querySelector("#title"),
+  subtitle: document.querySelector("#subtitle"),
+  statusBadge: document.querySelector("#statusBadge"),
+  statusIcon: document.querySelector("#statusIcon"),
+  primaryService: document.querySelector("#primaryService"),
+  duration: document.querySelector("#duration"),
+  durationLarge: document.querySelector("#durationLarge"),
+  startedAt: document.querySelector("#startedAt"),
+  traceId: document.querySelector("#traceId"),
+  eventCount: document.querySelector("#eventCount"),
+  eventCountLarge: document.querySelector("#eventCountLarge"),
+  eventBreakdown: document.querySelector("#eventBreakdown"),
+  likelyCauseTitle: document.querySelector("#likelyCauseTitle"),
+  likelyCause: document.querySelector("#likelyCause"),
+  serviceCount: document.querySelector("#serviceCount"),
+  servicePills: document.querySelector("#servicePills"),
+  incidentTime: document.querySelector("#incidentTime"),
+  timelineCount: document.querySelector("#timelineCount"),
+  timelineRows: document.querySelector("#timelineRows"),
+  selectedEventId: document.querySelector("#selectedEventId"),
+  eventDetailBody: document.querySelector("#eventDetailBody"),
+  payloadLabel: document.querySelector("#payloadLabel"),
+  payloadCode: document.querySelector("#payloadCode"),
+  metadataCode: document.querySelector("#metadataCode"),
+  traceSummary: document.querySelector("#traceSummary"),
+};
 
-apiKeyInput.value = localStorage.getItem("chronoscopeApiKey") ?? "";
+els.apiKey.value = localStorage.getItem("chronoscopeApiKey") ?? "";
+updateApiState();
 
 document.querySelector("#saveApiKey").addEventListener("click", () => {
-  localStorage.setItem("chronoscopeApiKey", apiKeyInput.value.trim());
-  statusLine.textContent = "API key saved";
-  statusLine.className = "status-line ok";
+  localStorage.setItem("chronoscopeApiKey", els.apiKey.value.trim());
+  updateApiState();
+  setStatus("API key saved", "ok");
+  loadReplays();
 });
 
-document.querySelector("#runDemo").addEventListener("click", async () => {
-  await runAction("Demo incident captured", async () => {
+document.querySelector("#runDemo").addEventListener("click", () =>
+  runAction("Demo incident captured", async () => {
     await apiFetch("/api/demo", { method: "POST" });
     await loadReplays();
-  });
-});
+  }),
+);
 
-document.querySelector("#runBnl").addEventListener("click", async () => {
-  await runAction("BNL probe captured", async () => {
+document.querySelector("#runBnl").addEventListener("click", () =>
+  runAction("BNL probe completed", async () => {
     await apiFetch("/api/bnl/probe", { method: "POST" });
     await loadReplays();
-  });
+  }),
+);
+
+document.querySelector("#exportJson").addEventListener("click", exportSelectedReplay);
+document.querySelector("#copyPayload").addEventListener("click", () => copyText(els.payloadCode.textContent));
+document.querySelector("#backToReplays").addEventListener("click", () => {
+  selectedReplayId = null;
+  selectedReplay = null;
+  selectedEventId = null;
+  renderDetail();
+  renderReplayList();
 });
 
-document.querySelector("#refresh").addEventListener("click", loadReplays);
+els.searchInput.addEventListener("input", renderReplayList);
+els.globalSearch.addEventListener("input", renderDetail);
+els.serviceFilter.addEventListener("change", renderReplayList);
+els.levelFilter.addEventListener("change", renderReplayList);
+els.sortToggle.addEventListener("click", () => {
+  sortNewestFirst = !sortNewestFirst;
+  els.sortToggle.textContent = sortNewestFirst ? "Newest First" : "Oldest First";
+  renderReplayList();
+});
 
 await loadReplays();
 
 async function loadReplays() {
-  const response = await apiFetch("/api/replays");
-  const { replays } = await response.json();
+  try {
+    const response = await apiFetch("/api/replays");
+    const { replays } = await response.json();
 
-  replayCount.textContent = replays.length;
-  sourceCount.textContent = selectedReplayId?.startsWith("run_") ? "Live" : "API";
-  replayList.innerHTML = "";
+    allReplays = replays;
+    syncServiceFilter(replays);
+    renderReplayList();
 
-  for (const replay of replays) {
-    const button = document.createElement("button");
-    button.className = `replay-item ${replay.replayId === selectedReplayId ? "active" : ""}`;
-    button.innerHTML = `
-      <span class="replay-kicker">${escapeHtml(replay.service)} - ${formatRelativeTime(replay.finishedAt)}</span>
-      <strong>${escapeHtml(replay.name)}</strong>
-      <span>${escapeHtml(replay.reason)}</span>
-      <span class="replay-time">${formatDateTime(replay.finishedAt)} - ${replay.eventCount} events</span>
-    `;
-    button.addEventListener("click", () => loadReplay(replay.replayId));
-    replayList.append(button);
-  }
+    if (!selectedReplayId && replays[0]) {
+      await loadReplay(replays[0].replayId);
+    } else if (selectedReplayId) {
+      const stillExists = replays.some((replay) => replay.replayId === selectedReplayId);
+      if (stillExists) await loadReplay(selectedReplayId);
+    }
 
-  if (!selectedReplayId && replays[0]) {
-    await loadReplay(replays[0].replayId);
+    setStatus("Ready", "neutral");
+  } catch (error) {
+    setStatus(error.message, "error");
   }
 }
 
 async function loadReplay(replayId) {
-  selectedReplayId = replayId;
   const response = await apiFetch(`/api/replays/${replayId}`);
   const { replay } = await response.json();
 
-  title.textContent = replay.name;
-  subtitle.textContent = `${replay.replayId} - ${replay.reason}`;
-  incidentTime.textContent = formatIncidentTime(replay);
-  likelyCause.textContent = replay.summary.likelyCause;
-  services.textContent = replay.summary.services.join(", ");
-  duration.textContent = `${replay.durationMs}ms`;
-  eventCount.textContent = `${replay.events.length} events`;
-  timeline.className = "timeline";
-  timeline.innerHTML = "";
+  selectedReplayId = replayId;
+  selectedReplay = replay;
+  selectedEventId = selectedEventId && replay.events.some((event) => event.id === selectedEventId)
+    ? selectedEventId
+    : replay.events.find((event) => event.level === "error")?.id ?? replay.events[0]?.id ?? null;
 
-  for (const event of replay.events) {
-    const item = document.createElement("article");
-    item.className = `event ${event.level === "error" ? "error" : event.level === "warn" ? "warn" : ""}`;
-    item.innerHTML = `
-      <div class="time">+${event.offsetMs}ms</div>
-      <div>
-        <div class="service">${escapeHtml(event.service)}</div>
-        <span class="level ${escapeHtml(event.level)}">${escapeHtml(event.level)}</span>
-      </div>
-      <div>
-        <span class="type">${escapeHtml(event.type)}</span>
-        <p class="message">${escapeHtml(event.message)}</p>
-        <pre class="payload">${escapeHtml(JSON.stringify(event.data, null, 2))}</pre>
-      </div>
-    `;
-    timeline.append(item);
-  }
-
-  await loadReplaysWithoutAutoSelect();
+  renderReplayList();
+  renderDetail();
 }
 
-async function loadReplaysWithoutAutoSelect() {
-  const response = await apiFetch("/api/replays");
-  const { replays } = await response.json();
+function renderReplayList() {
+  const visible = filterReplays(allReplays);
+  els.replayCount.textContent = visible.length;
+  els.replayList.innerHTML = "";
 
-  replayCount.textContent = replays.length;
-  replayList.innerHTML = "";
-
-  for (const replay of replays) {
-    const button = document.createElement("button");
-    button.className = `replay-item ${replay.replayId === selectedReplayId ? "active" : ""}`;
-    button.innerHTML = `
-      <span class="replay-kicker">${escapeHtml(replay.service)} - ${formatRelativeTime(replay.finishedAt)}</span>
-      <strong>${escapeHtml(replay.name)}</strong>
-      <span>${escapeHtml(replay.reason)}</span>
-      <span class="replay-time">${formatDateTime(replay.finishedAt)} - ${replay.eventCount} events</span>
-    `;
-    button.addEventListener("click", () => loadReplay(replay.replayId));
-    replayList.append(button);
+  if (!visible.length) {
+    els.replayList.innerHTML = `<div class="list-empty">No replays match the current filters.</div>`;
+    return;
   }
+
+  const grouped = groupByDay(visible);
+  for (const [label, replays] of grouped) {
+    const group = document.createElement("section");
+    group.className = "replay-group";
+    group.innerHTML = `<h3>${escapeHtml(label)}</h3>`;
+
+    for (const replay of replays) {
+      const summary = replay.summary ?? {};
+      const level = getReplayLevel(replay);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `replay-card ${selectedReplayId === replay.replayId ? "active" : ""} ${level}`;
+      button.innerHTML = `
+        <span class="severity-dot"></span>
+        <span class="replay-main">
+          <strong>${escapeHtml(replay.name)}</strong>
+          <span>${escapeHtml(replay.service)} · ${formatDateTime(replay.finishedAt)}</span>
+          <small>${escapeHtml(summary.headline ?? replay.reason)}</small>
+        </span>
+        <span class="replay-side">
+          <span class="badge ${level}">${level}</span>
+          <span>${formatDuration(replay.durationMs)}</span>
+        </span>
+      `;
+      button.addEventListener("click", () => loadReplay(replay.replayId));
+      group.append(button);
+    }
+
+    els.replayList.append(group);
+  }
+}
+
+function renderDetail() {
+  if (!selectedReplay) {
+    els.emptyState.classList.remove("hidden");
+    els.detailView.classList.add("hidden");
+    return;
+  }
+
+  els.emptyState.classList.add("hidden");
+  els.detailView.classList.remove("hidden");
+
+  const replay = selectedReplay;
+  const summary = replay.summary ?? {};
+  const services = normalizeServices(summary.services, replay.events);
+  const counts = countLevels(replay.events);
+  const selectedEvent = replay.events.find((event) => event.id === selectedEventId) ?? replay.events[0];
+  const headline = summary.headline ?? replay.reason;
+  const filteredEvents = filterEvents(replay.events, els.globalSearch.value);
+
+  els.title.textContent = replay.name;
+  els.subtitle.innerHTML = `
+    <span>ID: ${escapeHtml(replay.replayId)}</span>
+    <span>${escapeHtml(formatIncidentTime(replay))}</span>
+    <span>${escapeHtml(formatDuration(replay.durationMs))}</span>
+    <span>${escapeHtml(replay.service)}</span>
+    <span class="env-pill">production</span>
+  `;
+  els.statusBadge.textContent = "Failed";
+  els.statusBadge.className = "badge error";
+  els.statusIcon.textContent = "!";
+  els.primaryService.textContent = replay.service;
+  els.duration.textContent = formatDuration(replay.durationMs);
+  els.durationLarge.textContent = formatDuration(replay.durationMs);
+  els.startedAt.textContent = formatDateTime(replay.startedAt);
+  els.traceId.textContent = replay.traceId;
+  els.eventCount.textContent = replay.events.length;
+  els.eventCountLarge.textContent = replay.events.length;
+  els.eventBreakdown.textContent = `${counts.info} info, ${counts.warn} warn, ${counts.error} error`;
+  els.likelyCauseTitle.textContent = headline;
+  els.likelyCause.textContent = summary.likelyCause ?? replay.reason;
+  els.serviceCount.textContent = services.length;
+  els.servicePills.innerHTML = services.map((service) => `<span>${escapeHtml(service)}</span>`).join("");
+  els.incidentTime.textContent = formatIncidentTime(replay);
+  els.timelineCount.textContent = `${filteredEvents.length} events`;
+  els.metadataCode.textContent = JSON.stringify(
+    {
+      traceId: replay.traceId,
+      replayId: replay.replayId,
+      status: replay.status,
+      reason: replay.reason,
+      startedAt: replay.startedAt,
+      finishedAt: replay.finishedAt,
+      durationMs: replay.durationMs,
+      metadata: replay.metadata,
+    },
+    null,
+    2,
+  );
+  els.traceSummary.innerHTML = summaryRows({
+    "Trace ID": replay.traceId,
+    Name: replay.name,
+    Environment: "production",
+    "Started At": formatDateTime(replay.startedAt),
+    "Finished At": formatDateTime(replay.finishedAt),
+    Status: "Failed",
+  });
+
+  renderTimeline(filteredEvents);
+  renderEventDetails(selectedEvent);
+}
+
+function renderTimeline(events) {
+  els.timelineRows.innerHTML = "";
+
+  if (!events.length) {
+    els.timelineRows.innerHTML = `<div class="list-empty">No events match the current search.</div>`;
+    return;
+  }
+
+  for (const event of events) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `event-row ${event.level} ${event.id === selectedEventId ? "selected" : ""}`;
+    row.innerHTML = `
+      <span class="event-time">+${formatDuration(event.offsetMs)}</span>
+      <span class="event-line"><span></span></span>
+      <span class="event-copy">
+        <strong>${escapeHtml(event.message || event.type)}</strong>
+        <small>${escapeHtml(event.service)} · ${escapeHtml(event.type)}</small>
+      </span>
+      <span class="event-status">${escapeHtml(event.level)}</span>
+      <span class="event-note">${escapeHtml(event.level === "error" ? event.message : summarizeEventData(event.data))}</span>
+    `;
+    row.addEventListener("click", () => {
+      selectedEventId = event.id;
+      renderDetail();
+    });
+    els.timelineRows.append(row);
+  }
+}
+
+function renderEventDetails(event) {
+  if (!event) {
+    els.selectedEventId.textContent = "No event selected";
+    els.eventDetailBody.innerHTML = `<p class="muted">Select an event from the timeline.</p>`;
+    els.payloadCode.textContent = "{}";
+    return;
+  }
+
+  els.selectedEventId.textContent = `Event ID: ${event.id.slice(0, 10)}`;
+  els.eventDetailBody.innerHTML = `
+    <div class="event-detail-title">
+      <span class="detail-icon ${escapeHtml(event.level)}">${escapeHtml(event.level[0] ?? "i")}</span>
+      <div>
+        <strong>${escapeHtml(event.message || event.type)}</strong>
+        <span>${escapeHtml(event.service)}</span>
+      </div>
+      <span class="badge ${escapeHtml(event.level)}">${escapeHtml(event.level)}</span>
+    </div>
+    <dl>
+      ${summaryRows({
+        Time: `${formatDuration(event.offsetMs)} from start`,
+        Service: event.service,
+        Type: event.type,
+        Level: event.level,
+        Message: event.message || "-",
+      })}
+    </dl>
+  `;
+  els.payloadLabel.textContent = `${event.service} payload`;
+  els.payloadCode.textContent = JSON.stringify(event.data ?? {}, null, 2);
+}
+
+function filterReplays(replays) {
+  const query = els.searchInput.value.trim().toLowerCase();
+  const service = els.serviceFilter.value;
+  const level = els.levelFilter.value;
+
+  return [...replays]
+    .filter((replay) => {
+      const text = `${replay.name} ${replay.reason} ${replay.service} ${replay.replayId}`.toLowerCase();
+      const matchesQuery = !query || text.includes(query);
+      const matchesService = !service || replay.service === service;
+      const matchesLevel = !level || getReplayLevel(replay) === level;
+      return matchesQuery && matchesService && matchesLevel;
+    })
+    .sort((a, b) =>
+      sortNewestFirst
+        ? Date.parse(b.finishedAt) - Date.parse(a.finishedAt)
+        : Date.parse(a.finishedAt) - Date.parse(b.finishedAt),
+    );
+}
+
+function filterEvents(events, query) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return events;
+
+  return events.filter((event) =>
+    `${event.service} ${event.type} ${event.level} ${event.message} ${JSON.stringify(event.data)}`.
+      toLowerCase()
+      .includes(normalized),
+  );
+}
+
+function syncServiceFilter(replays) {
+  const current = els.serviceFilter.value;
+  const services = [...new Set(replays.map((replay) => replay.service).filter(Boolean))].sort();
+  els.serviceFilter.innerHTML = `<option value="">All Services</option>${services
+    .map((service) => `<option value="${escapeHtml(service)}">${escapeHtml(service)}</option>`)
+    .join("")}`;
+  els.serviceFilter.value = services.includes(current) ? current : "";
 }
 
 async function runAction(successMessage, action) {
-  statusLine.textContent = "Working...";
-  statusLine.className = "status-line busy";
-
+  setStatus("Working...", "busy");
   try {
     await action();
-    statusLine.textContent = successMessage;
-    statusLine.className = "status-line ok";
+    setStatus(successMessage, "ok");
   } catch (error) {
-    statusLine.textContent = error.message;
-    statusLine.className = "status-line error";
+    setStatus(error.message, "error");
   }
 }
 
@@ -141,8 +355,6 @@ async function apiFetch(url, options = {}) {
   const response = await fetchWithApiKey(url, options);
 
   if (response.status === 401) {
-    statusLine.textContent = "API key required";
-    statusLine.className = "status-line error";
     throw new Error("API key required");
   }
 
@@ -155,14 +367,103 @@ async function apiFetch(url, options = {}) {
 
 function fetchWithApiKey(url, options) {
   const headers = new Headers(options.headers ?? {});
-  const apiKey = apiKeyInput.value.trim() || localStorage.getItem("chronoscopeApiKey");
+  const apiKey = els.apiKey.value.trim() || localStorage.getItem("chronoscopeApiKey");
 
   if (apiKey) {
     localStorage.setItem("chronoscopeApiKey", apiKey);
     headers.set("X-API-Key", apiKey);
   }
 
+  updateApiState();
   return fetch(url, { ...options, headers });
+}
+
+function setStatus(message, state) {
+  els.statusLine.textContent = message;
+  els.statusLine.className = `status-line ${state}`;
+}
+
+function updateApiState() {
+  const hasKey = Boolean(els.apiKey.value.trim() || localStorage.getItem("chronoscopeApiKey"));
+  els.apiState.classList.toggle("on", hasKey);
+  els.topApiState.classList.toggle("on", hasKey);
+}
+
+function exportSelectedReplay() {
+  if (!selectedReplay) return;
+
+  const blob = new Blob([JSON.stringify(selectedReplay, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${selectedReplay.replayId}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    setStatus("Copied", "ok");
+  } catch {
+    setStatus("Copy unavailable", "error");
+  }
+}
+
+function groupByDay(replays) {
+  const groups = new Map();
+
+  for (const replay of replays) {
+    const label = dayLabel(replay.finishedAt);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(replay);
+  }
+
+  return groups;
+}
+
+function dayLabel(value) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+}
+
+function getReplayLevel(replay) {
+  const headline = `${replay.reason} ${replay.summary?.headline ?? ""}`.toLowerCase();
+  if (headline.includes("warn")) return "warn";
+  return "error";
+}
+
+function countLevels(events) {
+  return events.reduce(
+    (counts, event) => {
+      counts[event.level] = (counts[event.level] ?? 0) + 1;
+      return counts;
+    },
+    { info: 0, warn: 0, error: 0 },
+  );
+}
+
+function normalizeServices(summaryServices, events) {
+  if (Array.isArray(summaryServices)) return summaryServices;
+  return [...new Set(events.map((event) => event.service).filter(Boolean))];
+}
+
+function summarizeEventData(data) {
+  if (!data || typeof data !== "object") return "";
+  const entries = Object.entries(data).slice(0, 2);
+  return entries.map(([key, value]) => `${key}: ${String(value).slice(0, 28)}`).join(" · ");
+}
+
+function summaryRows(values) {
+  return Object.entries(values)
+    .map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value ?? "-")}</dd>`)
+    .join("");
 }
 
 function formatIncidentTime(replay) {
@@ -178,9 +479,7 @@ function formatIncidentTime(replay) {
 
 function formatDateTime(value) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown time";
-  }
+  if (Number.isNaN(date.getTime())) return "Unknown time";
 
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -192,9 +491,7 @@ function formatDateTime(value) {
 
 function formatRelativeTime(value) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "unknown";
-  }
+  if (Number.isNaN(date.getTime())) return "unknown";
 
   const divisions = [
     { amount: 60, unit: "second" },
@@ -214,11 +511,16 @@ function formatRelativeTime(value) {
         division.unit,
       );
     }
-
     duration /= division.amount;
   }
 
   return "unknown";
+}
+
+function formatDuration(ms) {
+  const value = Number(ms) || 0;
+  if (value < 1000) return `${Math.round(value)}ms`;
+  return `${(value / 1000).toFixed(value < 10000 ? 2 : 1)}s`;
 }
 
 function escapeHtml(value) {
