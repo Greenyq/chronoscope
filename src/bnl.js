@@ -58,7 +58,7 @@ export async function runBnlProbe() {
         ? snapshot.error ?? "BNL snapshot failed"
         : warning
           ? warnings[0] ?? "BNL snapshot reported warnings"
-          : "BNL snapshot healthy",
+          : undefined,
     });
   } catch (error) {
     addEvent(trace.traceId, {
