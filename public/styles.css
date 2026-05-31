@@ -556,6 +556,8 @@ kbd {
 }
 
 .hero-card,
+.incident-analysis-card,
+.report-card,
 .insight-card,
 .timeline-card,
 .event-details,
@@ -571,6 +573,12 @@ kbd {
 
 .hero-card {
   padding: 18px 20px;
+}
+
+.incident-analysis-card,
+.report-card {
+  padding: 18px;
+  margin-bottom: 14px;
 }
 
 .hero-title-row {
@@ -620,6 +628,165 @@ kbd {
   margin: 16px 0;
   border-bottom: 1px solid var(--line-soft);
   padding-bottom: 16px;
+}
+
+.analysis-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.5fr);
+  gap: 16px;
+}
+
+.root-cause-lead {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid rgba(255, 93, 100, 0.24);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255, 93, 100, 0.13), rgba(124, 92, 255, 0.06));
+  padding: 18px;
+}
+
+.root-cause-lead strong {
+  font-size: 28px;
+  line-height: 1.14;
+  overflow-wrap: anywhere;
+}
+
+.root-cause-lead p {
+  color: #c9d3e4;
+  line-height: 1.55;
+}
+
+.analysis-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.analysis-facts > div {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 96px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(9, 15, 26, 0.62);
+  padding: 13px;
+}
+
+.analysis-facts span,
+.comparison-columns span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.analysis-facts strong {
+  overflow-wrap: anywhere;
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.severity-badge.critical,
+.severity-badge.high {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.severity-badge.low {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.story-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.story-list li {
+  color: #d8e0ec;
+  line-height: 1.45;
+}
+
+.story-list li::marker {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.story-list span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.story-list li.error {
+  color: #ffb4b8;
+}
+
+.investigation-body,
+.comparison-body {
+  display: grid;
+  gap: 14px;
+}
+
+.hypothesis {
+  display: grid;
+  gap: 6px;
+  border-radius: 8px;
+  background: rgba(124, 92, 255, 0.13);
+  padding: 14px;
+}
+
+.hypothesis strong {
+  font-size: 20px;
+}
+
+.investigation-body h4 {
+  margin: 4px 0 -4px;
+}
+
+.investigation-body ul,
+.diff-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #d8e0ec;
+}
+
+.comparison-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.comparison-columns > div {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(9, 15, 26, 0.64);
+  padding: 12px;
 }
 
 .stat-strip div {
@@ -772,6 +939,19 @@ kbd {
   background: linear-gradient(90deg, transparent, rgba(255, 93, 100, 0.08));
 }
 
+.event-row.causal {
+  border-left: 2px solid rgba(124, 92, 255, 0.7);
+  padding-left: 8px;
+}
+
+.event-row.first-failure {
+  background: linear-gradient(90deg, rgba(255, 93, 100, 0.18), rgba(255, 93, 100, 0.04));
+}
+
+.event-row.noisy {
+  opacity: 0.68;
+}
+
 .event-time,
 .event-note {
   color: var(--muted);
@@ -907,8 +1087,14 @@ pre {
 
   .lower-grid,
   .content-grid,
-  .insight-grid {
+  .insight-grid,
+  .report-grid,
+  .analysis-layout {
     grid-template-columns: 1fr;
+  }
+
+  .analysis-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -936,6 +1122,10 @@ pre {
 
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analysis-facts {
+    grid-template-columns: 1fr;
   }
 
   .stat-strip div {
@@ -1011,7 +1201,8 @@ pre {
 
   .detail-actions,
   .filters,
-  .quick-actions {
+  .quick-actions,
+  .comparison-columns {
     grid-template-columns: 1fr;
     flex-direction: column;
   }

@@ -22,19 +22,22 @@ const els = {
   subtitle: document.querySelector("#subtitle"),
   statusBadge: document.querySelector("#statusBadge"),
   statusIcon: document.querySelector("#statusIcon"),
-  primaryService: document.querySelector("#primaryService"),
-  duration: document.querySelector("#duration"),
   durationLarge: document.querySelector("#durationLarge"),
-  startedAt: document.querySelector("#startedAt"),
-  traceId: document.querySelector("#traceId"),
-  eventCount: document.querySelector("#eventCount"),
-  eventCountLarge: document.querySelector("#eventCountLarge"),
-  eventBreakdown: document.querySelector("#eventBreakdown"),
+  severityBadge: document.querySelector("#severityBadge"),
+  confidenceScore: document.querySelector("#confidenceScore"),
+  impactText: document.querySelector("#impactText"),
+  firstFailureEvent: document.querySelector("#firstFailureEvent"),
+  lastSuccessfulEvent: document.querySelector("#lastSuccessfulEvent"),
+  tagPills: document.querySelector("#tagPills"),
   likelyCauseTitle: document.querySelector("#likelyCauseTitle"),
   likelyCause: document.querySelector("#likelyCause"),
   serviceCount: document.querySelector("#serviceCount"),
   servicePills: document.querySelector("#servicePills"),
-  incidentTime: document.querySelector("#incidentTime"),
+  rootCauseConfidence: document.querySelector("#rootCauseConfidence"),
+  causalChain: document.querySelector("#causalChain"),
+  investigationBody: document.querySelector("#investigationBody"),
+  incidentStory: document.querySelector("#incidentStory"),
+  comparisonBody: document.querySelector("#comparisonBody"),
   timelineCount: document.querySelector("#timelineCount"),
   timelineRows: document.querySelector("#timelineRows"),
   selectedEventId: document.querySelector("#selectedEventId"),
@@ -181,10 +184,10 @@ function renderDetail() {
 
   const replay = selectedReplay;
   const summary = replay.summary ?? {};
-  const services = normalizeServices(summary.services, replay.events);
-  const counts = countLevels(replay.events);
+  const analysis = ensureAnalysis(replay);
+  const incident = analysis.incident;
+  const services = normalizeServices(incident.affectedServices ?? summary.services, replay.events);
   const selectedEvent = replay.events.find((event) => event.id === selectedEventId) ?? replay.events[0];
-  const headline = summary.headline ?? replay.reason;
   const filteredEvents = filterEvents(replay.events, els.globalSearch.value);
 
   els.title.textContent = replay.name;
@@ -192,25 +195,25 @@ function renderDetail() {
     <span>ID: ${escapeHtml(replay.replayId)}</span>
     <span>${escapeHtml(formatIncidentTime(replay))}</span>
     <span>${escapeHtml(formatDuration(replay.durationMs))}</span>
-    <span>${escapeHtml(replay.service)}</span>
+    <span>${escapeHtml(incident.impact)}</span>
     <span class="env-pill">production</span>
   `;
   els.statusBadge.textContent = "Failed";
   els.statusBadge.className = "badge error";
   els.statusIcon.textContent = "!";
-  els.primaryService.textContent = replay.service;
-  els.duration.textContent = formatDuration(replay.durationMs);
   els.durationLarge.textContent = formatDuration(replay.durationMs);
-  els.startedAt.textContent = formatDateTime(replay.startedAt);
-  els.traceId.textContent = replay.traceId;
-  els.eventCount.textContent = replay.events.length;
-  els.eventCountLarge.textContent = replay.events.length;
-  els.eventBreakdown.textContent = `${counts.info} info, ${counts.warn} warn, ${counts.error} error`;
-  els.likelyCauseTitle.textContent = headline;
-  els.likelyCause.textContent = summary.likelyCause ?? replay.reason;
+  els.severityBadge.textContent = incident.severity;
+  els.severityBadge.className = `severity-badge ${incident.severity.toLowerCase()}`;
+  els.confidenceScore.textContent = formatConfidence(incident.confidence);
+  els.impactText.textContent = incident.impact;
+  els.firstFailureEvent.textContent = incident.firstFailureEvent;
+  els.lastSuccessfulEvent.textContent = incident.lastSuccessfulEvent;
+  els.likelyCauseTitle.textContent = incident.likelyRootCause;
+  els.likelyCause.textContent = analysis.rootCause?.evidence?.[0] ?? summary.likelyCause ?? replay.reason;
   els.serviceCount.textContent = services.length;
   els.servicePills.innerHTML = services.map((service) => `<span>${escapeHtml(service)}</span>`).join("");
-  els.incidentTime.textContent = formatIncidentTime(replay);
+  els.tagPills.innerHTML = (incident.tags ?? []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
+  els.rootCauseConfidence.textContent = `${formatConfidence(analysis.rootCause?.confidence ?? incident.confidence)} confidence`;
   els.timelineCount.textContent = `${filteredEvents.length} events`;
   els.metadataCode.textContent = JSON.stringify(
     {
@@ -222,6 +225,8 @@ function renderDetail() {
       finishedAt: replay.finishedAt,
       durationMs: replay.durationMs,
       metadata: replay.metadata,
+      analysisProvider: analysis.provider,
+      generatedAt: analysis.generatedAt,
     },
     null,
     2,
@@ -230,17 +235,26 @@ function renderDetail() {
     "Trace ID": replay.traceId,
     Name: replay.name,
     Environment: "production",
+    Severity: incident.severity,
+    Confidence: formatConfidence(incident.confidence),
     "Started At": formatDateTime(replay.startedAt),
     "Finished At": formatDateTime(replay.finishedAt),
     Status: "Failed",
   });
 
-  renderTimeline(filteredEvents);
+  renderCausalChain(analysis);
+  renderInvestigation(analysis);
+  renderStory(analysis);
+  renderComparison(analysis);
+  renderTimeline(filteredEvents, analysis);
   renderEventDetails(selectedEvent);
 }
 
-function renderTimeline(events) {
+function renderTimeline(events, analysis) {
   els.timelineRows.innerHTML = "";
+  const firstFailureId = analysis.timeline?.firstFailureEventId;
+  const causalIds = new Set(analysis.timeline?.causalEventIds ?? []);
+  const noisyIds = new Set(analysis.timeline?.noisyEventIds ?? []);
 
   if (!events.length) {
     els.timelineRows.innerHTML = `<div class="list-empty">No events match the current search.</div>`;
@@ -250,7 +264,14 @@ function renderTimeline(events) {
   for (const event of events) {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = `event-row ${event.level} ${event.id === selectedEventId ? "selected" : ""}`;
+    row.className = [
+      "event-row",
+      event.level,
+      event.id === selectedEventId ? "selected" : "",
+      event.id === firstFailureId ? "first-failure" : "",
+      causalIds.has(event.id) ? "causal" : "",
+      noisyIds.has(event.id) ? "noisy" : "",
+    ].filter(Boolean).join(" ");
     row.innerHTML = `
       <span class="event-time">+${formatDuration(event.offsetMs)}</span>
       <span class="event-line"><span></span></span>
@@ -267,6 +288,59 @@ function renderTimeline(events) {
     });
     els.timelineRows.append(row);
   }
+}
+
+function renderCausalChain(analysis) {
+  const chain = analysis.rootCause?.causalChain ?? [];
+  els.causalChain.innerHTML = chain
+    .map((event) => `
+      <li>
+        <strong>${escapeHtml(event.type)}</strong>
+        <span>${escapeHtml(event.service)} · ${escapeHtml(event.message || event.level)}</span>
+      </li>
+    `)
+    .join("");
+}
+
+function renderInvestigation(analysis) {
+  const investigation = analysis.investigation ?? {};
+  els.investigationBody.innerHTML = `
+    <div class="hypothesis">
+      <span class="label">Hypothesis</span>
+      <strong>${escapeHtml(investigation.hypothesis ?? "Unknown incident")}</strong>
+      <span>${escapeHtml(formatConfidence(investigation.confidence ?? 0))}</span>
+    </div>
+    <h4>Supporting Evidence</h4>
+    <ul>${(investigation.supportingEvidence ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    <h4>Suggested Actions</h4>
+    <ul>${(investigation.suggestedActions ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+  `;
+}
+
+function renderStory(analysis) {
+  els.incidentStory.innerHTML = (analysis.story ?? [])
+    .map((item) => `<li class="${escapeHtml(item.level)}"><span>${escapeHtml(item.service)}</span>${escapeHtml(item.text)}</li>`)
+    .join("");
+}
+
+function renderComparison(analysis) {
+  const comparison = analysis.comparison ?? {};
+  const differences = comparison.differences ?? [];
+
+  if (!differences.length) {
+    els.comparisonBody.innerHTML = `<div class="list-empty">${escapeHtml(comparison.baselineName ?? "No successful baseline attached")}</div>`;
+    return;
+  }
+
+  els.comparisonBody.innerHTML = `
+    <div class="comparison-columns">
+      <div><span>FAILED replay</span><strong>${escapeHtml(selectedReplay.reason)}</strong></div>
+      <div><span>SUCCESSFUL replay</span><strong>${escapeHtml(comparison.baselineName ?? "Baseline")}</strong></div>
+    </div>
+    <ul class="diff-list">
+      ${differences.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+    </ul>
+  `;
 }
 
 function renderEventDetails(event) {
@@ -434,9 +508,73 @@ function dayLabel(value) {
 }
 
 function getReplayLevel(replay) {
+  const severity = replay.analysis?.incident?.severity?.toLowerCase();
+  if (severity === "low") return "info";
+  if (severity === "medium") return "warn";
   const headline = `${replay.reason} ${replay.summary?.headline ?? ""}`.toLowerCase();
   if (headline.includes("warn")) return "warn";
   return "error";
+}
+
+function ensureAnalysis(replay) {
+  if (replay.analysis?.incident) return replay.analysis;
+
+  const services = normalizeServices(replay.summary?.services, replay.events);
+  const errorEvent = replay.events.find((event) => event.level === "error");
+  const lastSuccess = [...replay.events].reverse().find((event) => event.level === "info");
+  const tags = inferTags(replay);
+
+  return {
+    provider: "legacy-summary",
+    generatedAt: replay.finishedAt,
+    incident: {
+      likelyRootCause: replay.summary?.likelyCause ?? replay.reason,
+      confidence: 0.58,
+      impact: `${services[0] ?? replay.service} workflow failed`,
+      affectedServices: services,
+      firstFailureEvent: errorEvent ? `${errorEvent.type} (${errorEvent.service})` : "Unknown",
+      lastSuccessfulEvent: lastSuccess ? `${lastSuccess.type} (${lastSuccess.service})` : "Unknown",
+      durationMs: replay.durationMs,
+      severity: "Medium",
+      tags,
+    },
+    rootCause: {
+      confidence: 0.58,
+      evidence: [replay.summary?.likelyCause ?? replay.reason],
+      causalChain: replay.events.slice(-5),
+    },
+    story: replay.events.map((event) => ({
+      service: event.service,
+      level: event.level,
+      text: `${event.message || event.type}.`,
+    })),
+    investigation: {
+      hypothesis: replay.summary?.likelyCause ?? replay.reason,
+      confidence: 0.58,
+      supportingEvidence: [replay.summary?.lastObservedStep ?? replay.reason],
+      suggestedActions: ["Inspect the first failing event.", "Compare with a successful replay.", "Add a more specific analysis rule."],
+    },
+    comparison: { baselineName: "No successful baseline attached", differences: [] },
+    timeline: {
+      firstFailureEventId: errorEvent?.id ?? null,
+      causalEventIds: replay.events.slice(-5).map((event) => event.id),
+      noisyEventIds: [],
+    },
+  };
+}
+
+function inferTags(replay) {
+  const text = JSON.stringify(replay).toLowerCase();
+  return [
+    ["timeout", "timeout"],
+    ["validation", "validation"],
+    ["dependency", "dependency"],
+    ["database", "database"],
+    ["api", "api"],
+    ["auth", "auth"],
+    ["integration", "integration"],
+    ["business-rule", "business"],
+  ].filter(([, needle]) => text.includes(needle)).map(([tag]) => tag);
 }
 
 function countLevels(events) {
@@ -521,6 +659,11 @@ function formatDuration(ms) {
   const value = Number(ms) || 0;
   if (value < 1000) return `${Math.round(value)}ms`;
   return `${(value / 1000).toFixed(value < 10000 ? 2 : 1)}s`;
+}
+
+function formatConfidence(value) {
+  const normalized = Number(value) <= 1 ? Number(value) * 100 : Number(value);
+  return `${Math.round(normalized || 0)}%`;
 }
 
 function escapeHtml(value) {
