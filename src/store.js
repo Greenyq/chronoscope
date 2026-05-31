@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { analyzeReplay, summaryFromAnalysis } from "./analysis.js";
 
 const activeTraces = new Map();
 
@@ -139,8 +140,10 @@ export function finishTrace(traceId, result) {
     reason: result.reason ?? `HTTP ${result.statusCode}`,
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - Date.parse(trace.startedAt),
-    summary: summarize(trace, result),
   };
+  replay.analysis = analyzeReplay(replay, result);
+  replay.metadata = { ...replay.metadata, analysis: replay.analysis };
+  replay.summary = summaryFromAnalysis(replay, result, replay.analysis);
 
   persistReplay(replay);
   trimReplays();
@@ -163,6 +166,12 @@ export function listReplays() {
       durationMs: replay.durationMs,
       eventCount: replay.events.length,
       summary: replay.summary,
+      analysis: replay.analysis
+        ? {
+            incident: replay.analysis.incident,
+            investigation: replay.analysis.investigation,
+          }
+        : undefined,
     };
   });
 }
@@ -203,23 +212,6 @@ function openDatabase(filePath) {
   }
 
   return new DatabaseSync(filePath);
-}
-
-function summarize(trace, result) {
-  const services = [...new Set(trace.events.map((event) => event.service))];
-  const errorEvent =
-    trace.events.find((event) => event.level === "error" && event.type !== "trace.failed") ??
-    trace.events.find((event) => event.level === "error");
-  const slowestEvent = [...trace.events].sort((a, b) => b.offsetMs - a.offsetMs)[0];
-
-  return {
-    headline: result.reason ?? errorEvent?.message ?? "Trace failed",
-    services,
-    likelyCause: errorEvent
-      ? `${errorEvent.service} emitted ${errorEvent.type}: ${errorEvent.message}`
-      : "Failure was reported at trace finish without an explicit error event.",
-    lastObservedStep: slowestEvent?.message ?? "No events captured.",
-  };
 }
 
 function redact(value) {

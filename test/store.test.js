@@ -34,7 +34,12 @@ test("failed traces are persisted as replay sessions", () => {
   assert.equal(replays.length, 1);
   assert.equal(replays[0].reason, "DB timeout");
   assert.equal(replays[0].eventCount, 3);
-  assert.equal(getReplay(replays[0].replayId).reason, "DB timeout");
+  const replay = getReplay(replays[0].replayId);
+  assert.equal(replay.reason, "DB timeout");
+  assert.equal(replay.analysis.incident.likelyRootCause, "External dependency timeout");
+  assert.equal(replay.analysis.incident.severity, "High");
+  assert.ok(replay.analysis.incident.tags.includes("timeout"));
+  assert.ok(replay.analysis.investigation.suggestedActions.length > 0);
 });
 
 test("sensitive event data is redacted", () => {
