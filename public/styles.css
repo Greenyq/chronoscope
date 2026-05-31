@@ -38,7 +38,7 @@ body {
 
 body {
   min-height: 100vh;
-  overflow: hidden;
+  overflow: auto;
 }
 
 button,
@@ -53,7 +53,8 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 228px 420px 1fr;
+  grid-template-columns: 228px minmax(340px, 420px) minmax(0, 1fr);
+  height: 100vh;
   min-height: 100vh;
   background:
     radial-gradient(circle at 75% 0%, rgba(124, 92, 255, 0.12), transparent 34%),
@@ -268,6 +269,7 @@ select:focus {
 .replay-pane {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   padding: 24px;
   background: rgba(9, 15, 26, 0.82);
 }
@@ -521,6 +523,7 @@ kbd {
 }
 
 .detail-view {
+  flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 18px 22px;
@@ -573,6 +576,7 @@ kbd {
 .hero-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -611,7 +615,7 @@ kbd {
 
 .stat-strip {
   display: grid;
-  grid-template-columns: 1.1fr 0.7fr 1fr 1.6fr 0.6fr;
+  grid-template-columns: minmax(120px, 1.1fr) minmax(92px, 0.7fr) minmax(140px, 1fr) minmax(160px, 1.6fr) minmax(72px, 0.6fr);
   gap: 0;
   margin: 16px 0;
   border-bottom: 1px solid var(--line-soft);
@@ -640,7 +644,7 @@ kbd {
 
 .insight-grid {
   display: grid;
-  grid-template-columns: 1.2fr 1.2fr 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 14px;
 }
@@ -747,7 +751,7 @@ kbd {
 
 .event-row {
   display: grid;
-  grid-template-columns: 72px 22px minmax(190px, 1fr) 88px minmax(160px, 0.8fr);
+  grid-template-columns: 72px 22px minmax(150px, 1fr) 78px minmax(120px, 0.8fr);
   gap: 12px;
   align-items: center;
   min-height: 58px;
@@ -799,6 +803,20 @@ kbd {
 .event-copy {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.event-copy strong,
+.event-copy small,
+.event-note,
+.replay-main strong,
+.replay-main span,
+.replay-main small,
+.hero-title-row h2,
+.insight-card strong,
+.insight-card p,
+.stat-strip strong {
+  overflow-wrap: anywhere;
 }
 
 .event-status {
@@ -883,12 +901,8 @@ pre {
 }
 
 @media (max-width: 1280px) {
-  body {
-    overflow: auto;
-  }
-
   .app-shell {
-    grid-template-columns: 210px 360px minmax(700px, 1fr);
+    grid-template-columns: 200px minmax(300px, 360px) minmax(0, 1fr);
   }
 
   .lower-grid,
@@ -898,9 +912,52 @@ pre {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 190px minmax(0, 1fr);
+    height: auto;
+  }
+
+  .rail {
+    position: sticky;
+    top: 0;
+    min-height: 100vh;
+  }
+
+  .detail-pane {
+    grid-column: 1 / -1;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .detail-view {
+    overflow: visible;
+  }
+
+  .stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-strip div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    padding: 12px 0;
+  }
+
+  .event-row {
+    grid-template-columns: 70px 18px minmax(0, 1fr) 76px;
+  }
+
+  .event-note {
+    grid-column: 3 / 5;
+    padding-bottom: 10px;
+  }
+}
+
+@media (max-width: 760px) {
   .app-shell {
     display: block;
+    height: auto;
   }
 
   .rail,
@@ -911,11 +968,16 @@ pre {
   }
 
   .rail {
+    position: static;
     min-height: auto;
   }
 
+  .replay-pane {
+    padding: 18px 14px;
+  }
+
   .detail-view {
-    padding: 16px;
+    padding: 16px 14px;
   }
 
   .topbar,
@@ -938,11 +1000,23 @@ pre {
   }
 
   .event-row {
-    grid-template-columns: 70px 18px 1fr;
+    grid-template-columns: 58px 18px minmax(0, 1fr);
+    gap: 8px;
   }
 
   .event-status,
   .event-note {
     grid-column: 3;
+  }
+
+  .detail-actions,
+  .filters,
+  .quick-actions {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  dl {
+    grid-template-columns: 1fr;
   }
 }
