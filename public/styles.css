@@ -232,6 +232,11 @@ h2 {
   line-height: 1.35;
 }
 
+.replay-time {
+  margin-top: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
 .replay-kicker {
   font-size: 11px;
   font-weight: 900;
@@ -259,6 +264,20 @@ h2 {
   gap: 16px;
   align-items: center;
   padding: 20px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.incident-time {
+  max-width: 280px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
 }
 
 .insight-grid {
@@ -409,5 +428,16 @@ h2 {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .topbar,
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .incident-time {
+    max-width: none;
+    text-align: left;
   }
 }
